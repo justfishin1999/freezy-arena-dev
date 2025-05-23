@@ -30,6 +30,9 @@ type ArenaNotifiers struct {
 	ReloadDisplaysNotifier             *websocket.Notifier
 	ScorePostedNotifier                *websocket.Notifier
 	ScoringStatusNotifier              *websocket.Notifier
+
+	//notify driver station displays about a/e stop trip
+	StationTripNotifier *websocket.Notifier
 }
 
 type MatchTimeMessage struct {
@@ -62,6 +65,9 @@ func (arena *Arena) configureNotifiers() {
 	arena.ReloadDisplaysNotifier = websocket.NewNotifier("reload", nil)
 	arena.ScorePostedNotifier = websocket.NewNotifier("scorePosted", arena.GenerateScorePostedMessage)
 	arena.ScoringStatusNotifier = websocket.NewNotifier("scoringStatus", arena.generateScoringStatusMessage)
+
+	//notify driver station displays about a/e stop trip
+	arena.StationTripNotifier = websocket.NewNotifier("stationTrip", nil)
 }
 
 func (arena *Arena) generateAllianceSelectionMessage() any {
