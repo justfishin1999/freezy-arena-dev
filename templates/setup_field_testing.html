@@ -1,13 +1,15 @@
 {{/*
   Copyright 2018 Team 254. All Rights Reserved.
-  Author: pat@patfairbank.com (Patrick Fairbank)
+  Author: pat@patfairbank.com
 
   UI for testing the game sounds and the LEDs and PLC connected to the field.
 */}}
 {{define "title"}}Field Testing{{end}}
+
 {{define "body"}}
 <div class="row justify-content-center">
-  <div class="col-lg-3">
+  <div class="col-lg-3 d-flex flex-column gap-3">
+    <!-- Game Sounds Card -->
     <div class="card card-body bg-body-tertiary">
       <legend>Game Sounds</legend>
       {{range $sound := .MatchSounds}}
@@ -18,7 +20,20 @@
         </p>
       {{end}}
     </div>
+
+    <!-- Alternate IO Tests Card -->
+    <div class="card card-body bg-body-tertiary">
+      <legend>Alternate IO Tests</legend>
+      <button type="button" class="btn btn-sm btn-success w-100 mb-2" onclick="triggerEStop(false)">
+        Test - Activate All E-Stops (DS and Field)
+      </button>
+      <button type="button" class="btn btn-sm btn-danger w-100" onclick="triggerEStop(true)">
+        Test - Disable All E-Stops (DS and Field)
+      </button>
+    </div>
   </div>
+
+  <!-- PLC Section -->
   <div class="col-lg-8">
     <div class="card card-body bg-body-tertiary">
       <legend>PLC</legend>
@@ -67,6 +82,7 @@
   </div>
 </div>
 {{end}}
+
 {{define "script"}}
 <script src="/static/js/setup_field_testing.js"></script>
 {{end}}

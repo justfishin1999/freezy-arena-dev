@@ -7,13 +7,14 @@ package web
 
 import (
 	"fmt"
-	"github.com/Team254/cheesy-arena/game"
 	"log"
 	"net/http"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"text/template"
+
+	"github.com/Team254/cheesy-arena/game"
 
 	"github.com/Team254/cheesy-arena/field"
 	"github.com/Team254/cheesy-arena/model"
@@ -241,8 +242,9 @@ func (web *Web) newHandler() http.Handler {
 	mux.HandleFunc("GET /admin/add_practice_match", web.addPracticeMatchGetHandler)
 	mux.HandleFunc("POST /admin/add_practice_match", web.addPracticeMatchPostHandler)
 	mux.HandleFunc("POST /admin/edit_practice_match", web.editPracticeMatchHandler)
+	//handle testing e stops
+	mux.HandleFunc("POST /setup/alt_io/e_stop", web.altIOEStopHandler)
 
-	
 	return mux
 }
 

@@ -33,3 +33,19 @@ $(function() {
     plcIoChange: function(event) { handlePlcIoChange(event.data); }
   });
 });
+
+function triggerEStop(state) {
+    fetch('/setup/alt_io/e_stop', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ state: state })
+    })
+    .then(response => {
+      if (!response.ok) {
+        alert("Failed to send E-Stop state.");
+      }
+    })
+    .catch(() => alert("Network error while sending E-Stop."));
+  }
