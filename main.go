@@ -7,9 +7,10 @@
 package main
 
 import (
+	"log"
+
 	"github.com/Team254/cheesy-arena/field"
 	"github.com/Team254/cheesy-arena/web"
-	"log"
 )
 
 const eventDbPath = "./event.db"
@@ -25,6 +26,8 @@ func main() {
 	// Start the web server in a separate goroutine.
 	web := web.NewWeb(arena)
 	go web.ServeWebInterface(httpPort)
+
+	go web.ServeAnnouncerInterface(8081)
 
 	// Run the arena state machine in the main thread.
 	arena.Run()

@@ -34,6 +34,7 @@ type EventSettings struct {
 	ApChannel                   int
 	SwitchAddress               string
 	SwitchPassword              string
+	SwitchVendor                string
 	PlcAddress                  string
 	AlternateIOEnabled          bool
 	AdminPassword               string

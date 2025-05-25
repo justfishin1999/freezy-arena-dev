@@ -182,7 +182,14 @@ func (arena *Arena) LoadSettings() error {
 		settings.NetworkSecurityEnabled,
 		accessPointWifiStatuses,
 	)
-	arena.networkSwitch = network.NewSwitch(settings.SwitchAddress, settings.SwitchPassword)
+	switch settings.SwitchVendor {
+	case "Aruba":
+		arena.networkSwitch = network.NewArubaSwitch(settings.SwitchAddress, settings.SwitchPassword)
+	default:
+		// Cisco is the default
+		arena.networkSwitch = network.NewCiscoSwitch(settings.SwitchAddress, settings.SwitchPassword)
+	}
+
 	arena.Plc.SetAddress(settings.PlcAddress)
 	arena.TbaClient = partner.NewTbaClient(settings.TbaEventCode, settings.TbaSecretId, settings.TbaSecret)
 	arena.NexusClient = partner.NewNexusClient(settings.TbaEventCode)

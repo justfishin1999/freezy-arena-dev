@@ -6,15 +6,16 @@ package network
 import (
 	"bytes"
 	"fmt"
-	"github.com/Team254/cheesy-arena/model"
-	"github.com/stretchr/testify/assert"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/Team254/cheesy-arena/model"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestConfigureSwitch(t *testing.T) {
-	sw := NewSwitch("127.0.0.1", "password")
+	sw := NewCiscoSwitch("127.0.0.1", "password")
 	assert.Equal(t, "UNKNOWN", sw.Status)
 	sw.port = 9050
 	sw.configBackoffDuration = time.Millisecond
