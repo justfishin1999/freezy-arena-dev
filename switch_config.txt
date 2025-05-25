@@ -9,7 +9,7 @@ boot-start-marker
 boot-end-marker
 !
 !
-enable secret 5 $1$kKSW$fCMwnMdYvXui1TulfyYHN/
+enable secret 5 $1$kKSW$fCMwnMdYvXui1TulfyYHN
 !
 no aaa new-model
 system mtu routing 1500
@@ -27,6 +27,12 @@ ip dhcp pool dhcppool
 ip dhcp pool vlan172
  network 172.16.100.0 255.255.255.0
  default-route 172.16.100.3
+ dns-server 8.8.8.8 8.8.4.4
+ lease 1
+!
+ip dhcp pool vlan173
+ network 172.17.100.0 255.255.255.0
+ default-route 172.17.100.3
  dns-server 8.8.8.8 8.8.4.4
  lease 1
 !
@@ -349,15 +355,15 @@ interface Vlan1
 !
 interface Vlan10
  ip address 10.0.1.4 255.255.255.0
- ip access-group 110 in
+ ip access-group DS-FMS in
 !
 interface Vlan20
  ip address 10.0.2.4 255.255.255.0
- ip access-group 120 in
+ ip access-group DS-FMS in
 !
 interface Vlan30
  ip address 10.0.3.4 255.255.255.0
- ip access-group 130 in
+ ip access-group DS-FMS in
 !
 interface Vlan40
  ip address 10.0.4.4 255.255.255.0
@@ -365,11 +371,11 @@ interface Vlan40
 !
 interface Vlan50
  ip address 10.0.5.4 255.255.255.0
- ip access-group 150 in
+ ip access-group DS-FMS in
 !
 interface Vlan60
  ip address 10.0.6.4 255.255.255.0
- ip access-group 160 in
+ ip access-group DS-FMS in
 !
 interface Vlan100
  ip address 10.0.100.3 255.255.255.0
@@ -378,33 +384,41 @@ interface Vlan172
  ip address 172.16.100.3 255.255.255.0
  ip access-group restricted-lan in
 !
+interface Vlan173
+ ip address 172.17.100.3 255.255.0
+ ip access-group announcer-lan in
+!
 ip classless
 ip http server
 ip http secure-server
 !
 !
 !
-access-list 110 permit ip 10.0.1.0 0.0.0.255 host 10.0.100.5
-access-list 110 permit udp any eq bootpc any eq bootps
-access-list 120 permit ip 10.0.2.0 0.0.0.255 host 10.0.100.5
-access-list 120 permit udp any eq bootpc any eq bootps
-access-list 130 permit ip 10.0.3.0 0.0.0.255 host 10.0.100.5
-access-list 130 permit udp any eq bootpc any eq bootps
-access-list 140 permit ip 10.0.4.0 0.0.0.255 host 10.0.100.5
-access-list 140 permit udp any eq bootpc any eq bootps
-access-list 150 permit ip 10.0.5.0 0.0.0.255 host 10.0.100.5
-access-list 150 permit udp any eq bootpc any eq bootps
-access-list 160 permit ip 10.0.6.0 0.0.0.255 host 10.0.100.5
-access-list 160 permit udp any eq bootpc any eq bootps
+ip access-list extended DS-FMS
+ permit udp any eq 1145 10.0.100.0 0.0.0.255 eq 1160
+ permit tcp any 10.0.100.0 0.0.0.255 eq 1750
+ permit icmp any 10.0.100.0 0.0.0.255
+ permit icmp any 10.0.0.4 0.255.255.255
+ permit udp any any eq bootpc
+ permit udp any any eq bootps
 !
 !
 ip access-list extended restricted-lan
  1 permit tcp 172.16.100.0 0.0.0.255 host 10.0.100.5 eq 8080
- 2 permit tcp 172.16.100.0 0.0.0.255 host 10.0.100.5 eq 80
+ 2 permit tcp 172.16.100.0 0.0.0.255 host 10.0.100.5 eq 8081
  60 permit ip 172.16.100.0 0.0.0.255 172.16.100.0 0.0.0.255
  70 deny ip 172.16.100.0 0.0.0.255 192.168.0.0 0.0.255.255
  80 deny ip 172.16.100.0 0.0.0.255 172.16.0.0 0.0.15.255
  90 deny ip 172.16.100.0 0.0.0.255 10.0.0.0 0.255.255.255
+ 100 permit ip any any
+!
+!
+ip access-list extended announcer-lan
+ 1 permit tcp 172.17.100.0 0.0.0.255 host 10.0.100.5 eq 8081
+ 60 permit ip 172.17.100.0 0.0.0.255 172.17.100.0 0.0.0.255
+ 70 deny ip 172.17.100.0 0.0.0.255 192.168.0.0 0.0.255.255
+ 80 deny ip 172.17.100.0 0.0.0.255 172.16.0.0 0.0.15.255
+ 90 deny ip 172.17.100.0 0.0.0.255 10.0.0.0 0.255.255.255
  100 permit ip any any
 !
 !
