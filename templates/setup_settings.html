@@ -200,8 +200,8 @@
           <div class="tab-pane fade" id="networking" role="tabpanel" aria-labelledby="networking-tab">
             <fieldset class="mb-4">
               <legend>Networking</legend>
-              <p>Enable this setting if you have a Vivid-Hosting VH-113 access point and Cisco Catalyst Layer 3 switch 
-                available, for isolating each team to its own SSID and VLAN..</p>
+              <p>Enable this setting if you have a Vivid-Hosting VH-113 access point and Cisco Catalyst Layer 3 switch, Cisco ISR 
+                , or Aruba Layer 3 Switch available, for isolating each team to its own SSID and VLAN..</p>
               <div class="row mb-3">
                 <label class="col-lg-8 control-label" for="networkSecurityEnabled">Enable advanced network security</label>
                 <div class="col-lg-1 checkbox">
@@ -251,9 +251,11 @@
               <div class="row mb-3">
                 <label class="col-lg-6 control-label">Switch Vendor</label>
                 <div class="col-lg-6">
-                  <select class="form-select" name="switch_vendor" id="switchVendor">
+                  <select class="form-select" name="switchVendor" id="switchVendor" value="{{.SwitchVendor}}">
                     <option value="Cisco" {{ if eq .EventSettings.SwitchVendor "Cisco" }}selected{{ end }}>Cisco</option>
                     <option value="Aruba" {{ if eq .EventSettings.SwitchVendor "Aruba" }}selected{{ end }}>Aruba</option>
+                    <!--<option value="TP-Link" {{if eq .EventSettings.SwitchVendor "TP-Link" }}selected{{ end }}>TP-Link</option>-->
+                    <option value="Cisco ISR" {{if eq .EventSettings.SwitchVendor "Cisco ISR" }}selected{{ end }}>Cisco ISR</option>
                   </select>
                 </div>
               </div>

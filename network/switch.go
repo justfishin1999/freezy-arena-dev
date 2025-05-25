@@ -74,6 +74,8 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	var err error
 	if sw.vendor == "Aruba" {
 		err = sw.configureArubaTeams(teams)
+	} else if sw.vendor == "Cisco ISR" {
+		err = sw.configureCiscoISRTeams(teams)
 	} else {
 		err = sw.configureCiscoTeams(teams)
 	}
@@ -224,6 +226,83 @@ func (sw *Switch) configureArubaTeams(teams [6]*model.Team) error {
 			ServerIpAddress,
 			vlan,
 			vlan,
+		)
+	}
+	addTeamVlan(teams[0], red1Vlan)
+	addTeamVlan(teams[1], red2Vlan)
+	addTeamVlan(teams[2], red3Vlan)
+	addTeamVlan(teams[3], blue1Vlan)
+	addTeamVlan(teams[4], blue2Vlan)
+	addTeamVlan(teams[5], blue3Vlan)
+	if len(addTeamVlansCommand) > 0 {
+		_, err = sw.runConfigCommand(addTeamVlansCommand)
+		if err != nil {
+			sw.Status = "ERROR"
+			return err
+		}
+	}
+
+	// Give some time for the configuration to take before another one can be attempted.
+	time.Sleep(sw.configBackoffDuration)
+
+	sw.Status = "ACTIVE"
+	return nil
+}
+
+func (sw *Switch) configureCiscoISRTeams(teams [6]*model.Team) error {
+	// Make sure multiple configurations aren't being set at the same time.
+	sw.mutex.Lock()
+	defer sw.mutex.Unlock()
+	sw.Status = "CONFIGURING"
+
+	// Remove old team VLANs to reset the switch state.
+	removeTeamVlansCommand := ""
+	for vlan := 10; vlan <= 60; vlan += 10 {
+		removeTeamVlansCommand += fmt.Sprintf(
+			"interface g0/0.%d\nno ip address\nno access-list 1%d\nno ip dhcp pool dhcp%d\n", vlan, vlan, vlan,
+		)
+	}
+	_, err := sw.runConfigCommand(removeTeamVlansCommand)
+	if err != nil {
+		sw.Status = "ERROR"
+		return err
+	}
+	time.Sleep(sw.configPauseDuration)
+
+	// Create the new team VLANs.
+	addTeamVlansCommand := ""
+	addTeamVlan := func(team *model.Team, vlan int) {
+		if team == nil {
+			return
+		}
+		teamPartialIp := fmt.Sprintf("%d.%d", team.Id/100, team.Id%100)
+		addTeamVlansCommand += fmt.Sprintf(
+			"ip dhcp excluded-address 10.%s.1 10.%s.19\n"+
+				"ip dhcp excluded-address 10.%s.200 10.%s.254\n"+
+				"ip dhcp pool dhcp%d\n"+
+				"network 10.%s.0 255.255.255.0\n"+
+				"default-router 10.%s.%d\n"+
+				"lease 7\n"+
+				"access-list 1%d permit ip 10.%s.0 0.0.0.255 host %s\n"+
+				"access-list 1%d permit udp any eq bootpc any eq bootps\n"+
+				"access-list 1%d permit icmp any any\n"+
+				"interface g0/0.%d\nip address 10.%s.%d 255.255.255.0\n",
+			teamPartialIp,
+			teamPartialIp,
+			teamPartialIp,
+			teamPartialIp,
+			vlan,
+			teamPartialIp,
+			teamPartialIp,
+			switchTeamGatewayAddress,
+			vlan,
+			teamPartialIp,
+			ServerIpAddress,
+			vlan,
+			vlan,
+			vlan,
+			teamPartialIp,
+			switchTeamGatewayAddress,
 		)
 	}
 	addTeamVlan(teams[0], red1Vlan)
