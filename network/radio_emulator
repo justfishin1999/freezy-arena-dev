@@ -1,0 +1,689 @@
+import http.server
+
+import socketserver
+
+import json
+
+import logging
+
+import time
+
+import socket
+
+
+
+# Configure logging
+
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+logger = logging.getLogger(__name__)
+
+
+
+# Configuration
+
+HOST = "0.0.0.0"
+
+HTTP_PORT = 80
+
+RADIO_IP = "10.0.100.2"
+
+AP_PASSWORD = ""  # Set to empty to disable auth
+
+
+
+# Simulated field radio state
+
+radio_state = {
+
+    "configured": False,
+
+    "status": "INACTIVE",
+
+    "channel": None,
+
+    "stations": {},  # {station_id: {team, ssid, key, vlan, isLinked: bool}}
+
+    "firmware_version": "1.3.0",
+
+    "last_error": None,
+
+    "last_request_time": None
+
+}
+
+
+
+# === HTML Web Interface with Link Toggle ===
+
+WEB_PAGE = f"""
+
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>FRC Field Radio Emulator</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+
+        .linked-badge {{ min-width: 70px; }}
+
+    </style>
+
+</head>
+
+<body class="bg-gray-100 font-sans">
+
+    <div class="container mx-auto p-4 max-w-5xl">
+
+        <h1 class="text-3xl font-bold mb-6 text-center text-blue-700">FRC Field Radio Emulator</h1>
+
+
+
+        <!-- Radio Info -->
+
+        <div id="radio-info" class="bg-white p-6 rounded-lg shadow-md mb-6">
+
+            <h2 class="text-xl font-semibold mb-3">Field Radio Status</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+
+                <p><strong>Radio IP:</strong> <span id="radio-ip">{RADIO_IP}</span></p>
+
+                <p><strong>Firmware:</strong> <span id="firmware-version">Loading...</span></p>
+
+                <p><strong>Channel:</strong> <span id="channel">None</span></p>
+
+                <p><strong>Status:</strong> <span id="status" class="font-mono">INACTIVE</span></p>
+
+                <p><strong>Configured:</strong> <span id="configured-status">No</span></p>
+
+                <p><strong>Last Error:</strong> <span id="last-error">None</span></p>
+
+                <p><strong>Last Request:</strong> <span id="last-request-time">None</span></p>
+
+            </div>
+
+        </div>
+
+
+
+        <!-- Station Table with Link Toggle -->
+
+        <div id="config-table" class="bg-white p-6 rounded-lg shadow-md">
+
+            <h2 class="text-xl font-semibold mb-3">Station Configurations</h2>
+
+            <div class="overflow-x-auto">
+
+                <table class="w-full border-collapse text-sm">
+
+                    <thead>
+
+                        <tr class="bg-gray-200">
+
+                            <th class="border p-2 text-left">Station</th>
+
+                            <th class="border p-2 text-left">Team</th>
+
+                            <th class="border p-2 text-left">SSID</th>
+
+                            <th class="border p-2 text-left">WPA Key</th>
+
+                            <th class="border p-2 text-left">VLAN</th>
+
+                            <th class="border p-2 text-left">Link Status</th>
+
+                            <th class="border p-2 text-left">Action</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody id="config-table-body">
+
+                        <!-- Filled by JS -->
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+            <div class="mt-4 text-center text-gray-500 text-xs">
+
+                Toggle "Linked" to simulate robot connection.
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+    <script>
+
+        // Only add Authorization header if password is set
+
+        const AP_PASSWORD = "{AP_PASSWORD}";
+
+        const authHeader = AP_PASSWORD ? {{"Authorization": `Bearer ${{AP_PASSWORD}}`}} : {{}};
+
+
+
+        async function fetchRadioStatus() {{
+
+            try {{
+
+                const headers = {{ "Accept": "application/json" }};
+
+                if (AP_PASSWORD) headers["Authorization"] = `Bearer ${{AP_PASSWORD}}`;
+
+
+
+                const response = await fetch('/status', {{ headers }});
+
+                if (!response.ok) throw new Error(`HTTP ${{response.status}}`);
+
+
+
+                const data = await response.json();
+
+
+
+                // Update info
+
+                document.getElementById('firmware-version').textContent = data.firmware_version;
+
+                document.getElementById('channel').textContent = data.channel || 'None';
+
+                document.getElementById('status').textContent = data.status || 'INACTIVE';
+
+                document.getElementById('configured-status').textContent = data.configured ? 'Yes' : 'No';
+
+                document.getElementById('last-error').textContent = data.last_error || 'None';
+
+                document.getElementById('last-request-time').textContent = data.last_request_time || 'None';
+
+
+
+                // Update table
+
+                const tableBody = document.getElementById('config-table-body');
+
+                tableBody.innerHTML = '';
+
+
+
+                const stations = data.stations || {{}};
+
+                const statuses = data.stationStatuses || {{}};
+
+
+
+                for (const [station, cfg] of Object.entries(stations)) {{
+
+                    const status = statuses[station] || {{}};
+
+                    const isLinked = !!status.isLinked;
+
+
+
+                    const row = document.createElement('tr');
+
+                    row.innerHTML = `
+
+                        <td class="border p-2 font-mono">${{station}}</td>
+
+                        <td class="border p-2">${{cfg.team || 'N/A'}}</td>
+
+                        <td class="border p-2 font-mono">${{cfg.ssid || '�'}}</td>
+
+                        <td class="border p-2">${{cfg.key ? '��������' : 'None'}}</td>
+
+                        <td class="border p-2">${{cfg.vlan || '�'}}</td>
+
+                        <td class="border p-2 text-center">
+
+                            <span class="linked-badge inline-block px-2 py-1 rounded text-xs font-semibold
+
+                                ${{isLinked ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}}">
+
+                                ${{isLinked ? 'LINKED' : 'NOT LINKED'}}
+
+                            </span>
+
+                        </td>
+
+                        <td class="border p-2 text-center">
+
+                            <button onclick="toggleLink('${{station}}', ${{!isLinked}})"
+
+                                    class="px-3 py-1 text-xs rounded font-medium transition
+
+                                        ${{isLinked ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-green-500 hover:bg-green-600 text-white'}}">
+
+                                ${{isLinked ? 'Unlink' : 'Link'}}
+
+                            </button>
+
+                        </td>
+
+                    `;
+
+                    tableBody.appendChild(row);
+
+                }}
+
+
+
+                if (Object.keys(stations).length === 0) {{
+
+                    tableBody.innerHTML = `<tr><td colspan="7" class="border p-4 text-center text-gray-500">No stations configured</td></tr>`;
+
+                }}
+
+            }} catch (error) {{
+
+                console.error('Fetch error:', error);
+
+                document.getElementById('config-table-body').innerHTML = 
+
+                    `<tr><td colspan="7" class="border p-4 text-center text-red-600">Failed to load: ${{error.message}}</td></tr>`;
+
+            }}
+
+        }}
+
+
+
+        async function toggleLink(station, link) {{
+
+            const button = event.target;
+
+            button.disabled = true;
+
+            button.textContent = 'Saving...';
+
+
+
+            try {{
+
+                const headers = {{ "Content-Type": "application/json" }};
+
+                if (AP_PASSWORD) headers["Authorization"] = `Bearer ${{AP_PASSWORD}}`;
+
+
+
+                const response = await fetch('/link', {{
+
+                    method: 'POST',
+
+                    headers,
+
+                    body: JSON.stringify({{ station, isLinked: link }})
+
+                }});
+
+
+
+                if (!response.ok) throw new Error('Update failed');
+
+
+
+                fetchRadioStatus();
+
+            }} catch (err) {{
+
+                alert('Failed to update: ' + err.message);
+
+            }} finally {{
+
+                setTimeout(() => {{ button.disabled = false; button.textContent = link ? 'Link' : 'Unlink'; }}, 500);
+
+            }}
+
+        }}
+
+
+
+        // Auto-refresh
+
+        window.onload = () => {{
+
+            fetchRadioStatus();
+
+            setInterval(fetchRadioStatus, 3000);
+
+        }};
+
+    </script>
+
+</body>
+
+</html>
+
+"""
+
+# === HTTP Handler ===
+
+class FRCFieldRadioEmulator(http.server.BaseHTTPRequestHandler):
+
+    def check_auth(self):
+
+        if not AP_PASSWORD:
+
+            return True
+
+        auth_header = self.headers.get("Authorization")
+
+        if not auth_header or not auth_header.startswith("Bearer "):
+
+            self._send_json(401, {"status": "error", "message": "Missing Authorization"})
+
+            return False
+
+        token = auth_header.split(" ")[1]
+
+        if token != AP_PASSWORD:
+
+            self._send_json(401, {"status": "error", "message": "Invalid token"})
+
+            return False
+
+        return True
+
+
+
+    def _send_json(self, code, data):
+
+        self.send_response(code)
+
+        self.send_header("Content-type", "application/json")
+
+        self.end_headers()
+
+        self.wfile.write(json.dumps(data).encode())
+
+
+
+    def do_GET(self):
+
+        if not self.check_auth():
+
+            return
+
+
+
+        if self.path == "/":
+
+            self.send_response(200)
+
+            self.send_header("Content-type", "text/html")
+
+            self.end_headers()
+
+            self.wfile.write(WEB_PAGE.encode())
+
+            logger.info("GET / - Served web GUI")
+
+
+
+        elif self.path == "/status":
+
+            station_statuses = {
+
+                sid: {
+
+                    "ssid": cfg.get("ssid", ""),
+
+                    "hashedWpaKey": "",
+
+                    "wpaKeySalt": "",
+
+                    "isLinked": cfg.get("isLinked", False),
+
+                    "rxRateMbps": 0.0,
+
+                    "txRateMbps": 0.0,
+
+                    "signalNoiseRatio": 0,
+
+                    "bandwidthUsedMbps": 0.0
+
+                } for sid, cfg in radio_state["stations"].items()
+
+            }
+
+            response = {
+
+                "status": radio_state["status"],
+
+                "channel": radio_state["channel"],
+
+                "stationStatuses": station_statuses,
+
+                "stations": radio_state["stations"],
+
+                "configured": radio_state["configured"],
+
+                "firmware_version": radio_state["firmware_version"],
+
+                "last_error": radio_state["last_error"],
+
+                "last_request_time": radio_state["last_request_time"]
+
+            }
+
+            self._send_json(200, response)
+
+            logger.info("GET /status - Sent full status")
+
+
+
+        elif self.path == "/health":
+
+            self._send_json(200, {
+
+                "status": "healthy",
+
+                "radio_ip": RADIO_IP,
+
+                "timestamp": time.strftime("%Y/%m/%d %H:%M:%S")
+
+            })
+
+
+
+        else:
+
+            self.send_response(404)
+
+            self.end_headers()
+
+
+
+    def do_POST(self):
+
+        if not self.check_auth():
+
+            return
+
+
+
+        if self.path == "/configuration":
+
+            # === Existing configuration logic (unchanged) ===
+
+            start_time = time.time()
+
+            radio_state["last_request_time"] = time.strftime("%Y/%m/%d %H:%M:%S")
+
+            radio_state["status"] = "CONFIGURING"
+
+            try:
+
+                content_length = int(self.headers.get("Content-Length", 0))
+
+                post_data = self.rfile.read(content_length).decode()
+
+                config = json.loads(post_data)
+
+
+
+                if "stationConfigurations" not in config:
+
+                    raise ValueError("Missing stationConfigurations")
+
+
+
+                radio_state["channel"] = config.get("channel")
+
+                stations = config["stationConfigurations"]
+
+                radio_state["stations"].clear()
+
+
+
+                for station_id, sc in stations.items():
+
+                    if not all(k in sc for k in ["ssid", "wpaKey"]):
+
+                        raise ValueError(f"Missing ssid/wpaKey for {station_id}")
+
+                    ssid = sc["ssid"]
+
+                    try:
+
+                        vlan = int(ssid)
+
+                    except:
+
+                        raise ValueError(f"SSID must be numeric: {ssid}")
+
+                    radio_state["stations"][station_id] = {
+
+                        "team": ssid,
+
+                        "ssid": ssid,
+
+                        "key": sc["wpaKey"] or None,
+
+                        "vlan": vlan,
+
+                        "isLinked": False  # Default
+
+                    }
+
+
+
+                radio_state["configured"] = True
+
+                radio_state["status"] = "ACTIVE"
+
+                radio_state["last_error"] = None
+
+                self._send_json(200, {"status": "success"})
+
+                logger.info(f"Configured {len(stations)} stations")
+
+
+
+            except Exception as e:
+
+                radio_state["status"] = "ERROR"
+
+                radio_state["last_error"] = str(e)
+
+                self._send_json(400 if "missing" in str(e).lower() else 500, {"status": "error", "message": str(e)})
+
+                logger.error(f"Config error: {e}")
+
+
+
+        elif self.path == "/link":
+
+            # === NEW: Toggle SSID Link Status ===
+
+            try:
+
+                content_length = int(self.headers.get("Content-Length", 0))
+
+                data = json.loads(self.rfile.read(content_length).decode())
+
+                station = data.get("station")
+
+                is_linked = bool(data.get("isLinked"))
+
+
+
+                if station not in radio_state["stations"]:
+
+                    self._send_json(404, {"status": "error", "message": "Station not found"})
+
+                    return
+
+
+
+                radio_state["stations"][station]["isLinked"] = is_linked
+
+                logger.info(f"Station {station} link status ? {'LINKED' if is_linked else 'NOT LINKED'}")
+
+                self._send_json(200, {"status": "success", "station": station, "isLinked": is_linked})
+
+
+
+            except Exception as e:
+
+                self._send_json(400, {"status": "error", "message": str(e)})
+
+                logger.error(f"Link toggle error: {e}")
+
+
+
+        else:
+
+            self.send_response(404)
+
+            self.end_headers()
+
+
+
+# === Server Startup ===
+
+def run_server():
+
+    socketserver.ThreadingTCPServer.allow_reuse_address = True
+
+    httpd = socketserver.ThreadingTCPServer((HOST, HTTP_PORT), FRCFieldRadioEmulator)
+
+    httpd.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+
+    logger.info(f"FRC Field Radio Emulator running on http://{RADIO_IP}:{HTTP_PORT}")
+
+    try:
+
+        httpd.serve_forever()
+
+    except KeyboardInterrupt:
+
+        logger.info("Shutting down...")
+
+    finally:
+
+        httpd.server_close()
+
+
+
+if __name__ == "__main__":
+
+    run_server()
